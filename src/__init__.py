@@ -1,0 +1,1 @@
+"""LogLens AI application package."""

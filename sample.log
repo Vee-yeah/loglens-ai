@@ -1,0 +1,5 @@
+2026-10-13 10:15:24 INFO  payment-service Starting request id=9b28
+2026-10-13 10:15:30 ERROR payment-service Failed to reach inventory service
+java.net.ConnectException: Connection refused: connect
+	at com.example.inventory.InventoryClient.getStock(InventoryClient.java:52)
+	at com.example.payment.PaymentProcessor.process(PaymentProcessor.java:87)

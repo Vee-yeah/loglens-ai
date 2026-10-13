@@ -1,0 +1,12 @@
+2026-10-13 09:41:19.002 INFO  [http-nio-8080-exec-4] c.acme.orders.OrderController : Creating order 8421
+2026-10-13 09:41:19.144 ERROR [http-nio-8080-exec-4] c.acme.inventory.InventoryClient : Inventory API call failed
+org.springframework.web.client.ResourceAccessException: I/O error on GET request for "http://inventory-service:8081/api/stock/sku-221": Connection refused
+	at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:791)
+	at org.springframework.web.client.RestTemplate.exchange(RestTemplate.java:676)
+	at com.acme.inventory.InventoryClient.getAvailability(InventoryClient.java:58)
+	at com.acme.orders.OrderService.createOrder(OrderService.java:91)
+	at com.acme.orders.OrderController.create(OrderController.java:43)
+Caused by: java.net.ConnectException: Connection refused: connect
+	at java.base/sun.nio.ch.Net.connect0(Native Method)
+	at java.base/sun.nio.ch.Net.connect(Net.java:579)
+2026-10-13 09:41:19.145 WARN  [http-nio-8080-exec-4] c.acme.orders.OrderService : Request failed; transaction rolled back

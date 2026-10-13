@@ -1,0 +1,13 @@
+Common test errors for LogLens AI
+
+--- Timeout ---
+2026-10-13 12:00:00 ERROR api.gateway: java.net.SocketTimeoutException: Read timed out after 30000ms
+
+--- Authentication ---
+2026-10-13 12:05:00 ERROR auth.client: HTTP 401 Unauthorized - invalid token
+
+--- Memory ---
+2026-10-13 12:10:00 ERROR batch.worker: java.lang.OutOfMemoryError: Java heap space
+
+--- Missing resource ---
+2026-10-13 12:15:00 ERROR file.service: HTTP 404 Not Found for /reports/monthly.csv

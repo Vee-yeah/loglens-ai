@@ -1,0 +1,10 @@
+2026-10-13 10:22:08.301 INFO  [scheduler-2] c.acme.billing.InvoiceJob : Generating invoices for account 108
+2026-10-13 10:22:09.984 ERROR [scheduler-2] o.h.engine.jdbc.spi.SqlExceptionHelper : ERROR: duplicate key value violates unique constraint "invoice_account_period_key"
+  Detail: Key (account_id, billing_period)=(108, 2026-10) already exists.
+2026-10-13 10:22:09.985 ERROR [scheduler-2] c.acme.billing.InvoiceJob : Invoice job failed
+org.springframework.dao.DataIntegrityViolationException: could not execute statement; SQL [insert into invoice (account_id, billing_period, amount) values (?, ?, ?)]; constraint [invoice_account_period_key]
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.convertHibernateAccessException(HibernateJpaDialect.java:281)
+	at org.springframework.orm.jpa.JpaTransactionManager.doCommit(JpaTransactionManager.java:565)
+Caused by: org.postgresql.util.PSQLException: ERROR: duplicate key value violates unique constraint "invoice_account_period_key"
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2725)
+	at org.postgresql.jdbc.PgPreparedStatement.executeUpdate(PgPreparedStatement.java:152)

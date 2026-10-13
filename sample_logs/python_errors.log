@@ -1,0 +1,8 @@
+2026-10-13 11:06:45,770 INFO  worker.jobs: Processing customer export job id=ce-311
+2026-10-13 11:06:46,102 ERROR worker.jobs: Export job ce-311 failed
+Traceback (most recent call last):
+  File "C:\\projects\\exporter\\worker\\jobs.py", line 74, in create_export
+    email = customer["contact"]["email"]
+            ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+TypeError: 'NoneType' object is not subscriptable
+2026-10-13 11:06:46,103 ERROR worker.retry: Job will not be retried because the input record is invalid
