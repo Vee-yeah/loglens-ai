@@ -94,7 +94,60 @@ def _rule_findings(text: str) -> list[dict[str, str]]:
     return matches
 
 
-def _local_answer(findings: list[dict[str, str]]) -> str:
+def _extract_specific_details(text: str) -> list[str]:
+    """Extract facts that can be stated without guessing from common log formats."""
+    details: list[str] = []
+
+    # Oracle ORA-00001 only includes the constraint name; the table/columns must
+    # be resolved from the database data dictionary unless the log includes SQL.
+    for owner_and_constraint in re.findall(
+        r"ORA-00001:\s*unique constraint\s*\(([^)]+)\)\s*violated", text, flags=re.IGNORECASE
+    ):
+        parts = owner_and_constraint.strip().split(".", maxsplit=1)
+        if len(parts) == 2:
+            owner, constraint = parts
+            lookup = (
+                "SELECT acc.table_name, acc.column_name, acc.position "
+                "FROM all_cons_columns acc JOIN all_constraints ac "
+                "ON ac.owner = acc.owner AND ac.constraint_name = acc.constraint_name "
+                f"WHERE ac.owner = UPPER('{owner}') AND ac.constraint_name = UPPER('{constraint}') "
+                "ORDER BY acc.position;"
+            )
+            details.append(
+                f"Oracle constraint in the log: `{owner}.{constraint}`. The table and column(s) are **not present in this excerpt**; resolve them with: `{lookup}`"
+            )
+        else:
+            details.append(f"Oracle constraint in the log: `{owner_and_constraint.strip()}`.")
+
+    for procedure, line in re.findall(r'ORA-06512:\s*at\s*"([^"]+)"(?:,\s*line\s*(\d+))?', text, flags=re.IGNORECASE):
+        location = f"`{procedure}`"
+        if line:
+            location += f", line **{line}**"
+        details.append(f"Oracle call-stack location: {location}.")
+
+    for constraint in re.findall(r'(?:constraint|UNIQUE KEY constraint)\s*["\']?([\w.$-]+)["\']?', text, flags=re.IGNORECASE):
+        value = constraint.strip()
+        if value and not any(value in item for item in details):
+            details.append(f"Constraint name referenced in the log: `{value}`.")
+
+    for columns, values in re.findall(r"Key\s*\(([^)]+)\)=\(([^)]+)\)", text, flags=re.IGNORECASE):
+        details.append(f"Conflicting database key from the log: column(s) `{columns}`; value(s) `{values}`.")
+
+    for table in re.findall(r"(?:relation|table|object)\s+[\"'`]([^\"'`]+)[\"'`]", text, flags=re.IGNORECASE):
+        details.append(f"Database object referenced in the log: `{table}`.")
+
+    for file_name, line, function in re.findall(r'File "([^"]+)", line (\d+), in ([^\n]+)', text):
+        details.append(f"Python traceback location: `{file_name}`, line **{line}**, function `{function.strip()}`.")
+
+    for class_name, file_name, line in re.findall(r"\bat\s+([\w.$]+)\(([^():]+):(\d+)\)", text):
+        if not class_name.startswith(("java.", "javax.", "sun.")):
+            details.append(f"Java stack-frame location: `{class_name}` in `{file_name}`, line **{line}**.")
+
+    # Keep the response readable when long traces contain many repeated frames.
+    return list(dict.fromkeys(details))[:8]
+
+
+def _local_answer(findings: list[dict[str, str]], details: list[str]) -> str:
     if not findings:
         return (
             "### Summary\nNo recognised error signature was found.\n\n"
@@ -107,16 +160,36 @@ def _local_answer(findings: list[dict[str, str]]) -> str:
         for item in findings
     )
     fixes = "\n".join(f"{i + 1}. {item['Recommended next step']}" for i, item in enumerate(findings))
-    return f"### What is likely wrong\n{bullets}\n\n### How to investigate and fix it\n{fixes}\n\n### Confidence\nRule-based match; confirm against the surrounding log context."
+    evidence = "\n".join(f"- {detail}" for detail in details) or "- No additional structured evidence could be extracted from this excerpt."
+    return (
+        f"### What is likely wrong\n{bullets}\n\n"
+        f"### Evidence captured from the log\n{evidence}\n\n"
+        f"### How to investigate and fix it\n{fixes}\n\n"
+        "### Confidence\nRule-based match; confirm against the surrounding log context."
+    )
 
 
-def _ai_answer(safe_text: str) -> str:
+def _ai_answer(safe_text: str, details: list[str]) -> str:
     from openai import OpenAI  # Imported only when the feature is configured.
 
-    instructions = """You are a senior site reliability engineer. Analyze the supplied log excerpt.
-Return concise Markdown with these headings: Summary, Evidence, Likely root cause,
-Recommended fix, and Verification. Do not invent facts. State uncertainty clearly.
-Do not ask the user to expose secrets, and never repeat any redacted value."""
+    extracted_evidence = "\n".join(f"- {detail}" for detail in details) or "- No structured details extracted."
+    instructions = f"""You are a senior site reliability engineer. Analyze the supplied log excerpt.
+Return concise Markdown with these headings: Summary, Exact evidence, Likely root cause,
+Recommended fix, and Verification.
+
+Your response must be grounded strictly in the log. Extract and name, when present:
+- the exact error code/type and its log line number;
+- database owner/schema, constraint, table, column(s), duplicate key value(s), and SQL/procedure line;
+- Java class, source file, and stack-frame line; or Python file, function, and traceback line.
+Never invent a table, key, column, or root cause. If a requested detail is absent, write
+"not present in the supplied log" and explain the precise safe command/query or extra log
+needed to obtain it. For Oracle ORA-00001, the owner.constraint alone does not identify
+the table/columns: include an ALL_CONS_COLUMNS/ALL_CONSTRAINTS lookup query. Avoid vague
+advice such as "check the database" when exact evidence exists.
+Do not ask the user to expose secrets, and never repeat any redacted value.
+
+Structured evidence extracted before AI analysis:
+{extracted_evidence}"""
     client = OpenAI()
     response = client.responses.create(
         model=OPENAI_MODEL,
@@ -130,12 +203,13 @@ def analyze_log(log_text: str) -> AnalysisResult:
     """Analyze log text locally, using AI when a configured key is available."""
     trimmed = log_text[:MAX_INPUT_CHARS]
     findings = _rule_findings(trimmed)
+    details = _extract_specific_details(trimmed)
     input_lines = len(log_text.splitlines())
     if not os.getenv("OPENAI_API_KEY"):
-        return AnalysisResult(_local_answer(findings), findings, "Local rule-based", input_lines)
+        return AnalysisResult(_local_answer(findings, details), findings, "Local rule-based", input_lines)
     try:
-        return AnalysisResult(_ai_answer(redact_secrets(trimmed)), findings, "OpenAI AI-assisted", input_lines)
+        return AnalysisResult(_ai_answer(redact_secrets(trimmed), details), findings, "OpenAI AI-assisted", input_lines)
     except Exception as error:  # Preserve usability when an API request fails.
-        answer = _local_answer(findings)
+        answer = _local_answer(findings, details)
         answer += f"\n\n> AI analysis was unavailable ({type(error).__name__}); showing local diagnostics."
         return AnalysisResult(answer, findings, "Local fallback", input_lines)

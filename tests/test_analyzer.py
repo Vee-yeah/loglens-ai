@@ -28,6 +28,17 @@ class AnalyzerTests(unittest.TestCase):
         self.assertIn("Missing dictionary key", signals)
         self.assertIn("Duplicate or unique-key violation", signals)
 
+    def test_oracle_unique_constraint_reports_constraint_and_source_line(self):
+        log = (
+            "ORA-00001: unique constraint (SCHEMA.CONSTRAINT_NAME) violated\n"
+            'ORA-06512: at "SCHEMA.PROCEDURE_NAME", line 78\n'
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False):
+            result = analyze_log(log)
+        self.assertIn("`SCHEMA.CONSTRAINT_NAME`", result.answer)
+        self.assertIn("line **78**", result.answer)
+        self.assertIn("all_cons_columns", result.answer.lower())
+
     def test_redacts_common_secrets(self):
         text = "api_key=super-secret Bearer abc.def-123 password: hunter2"
         self.assertNotIn("super-secret", redact_secrets(text))
