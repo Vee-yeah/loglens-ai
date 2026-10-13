@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from src.analyzer import analyze_log, redact_secrets
+from src.analyzer import _api_error_message, _detect_technologies, analyze_log, redact_secrets
 
 
 class AnalyzerTests(unittest.TestCase):
@@ -38,6 +38,30 @@ class AnalyzerTests(unittest.TestCase):
         self.assertIn("`SCHEMA.CONSTRAINT_NAME`", result.answer)
         self.assertIn("line **78**", result.answer)
         self.assertIn("all_cons_columns", result.answer.lower())
+
+    def test_oracle_missing_table_reports_source_lookup(self):
+        log = (
+            "ORA-00942: table or view does not exist\n"
+            'ORA-06512: at "SCHEMA.PACKAGE_NAME", line 45\n'
+            'ORA-06512: at "SCHEMA.TRIGGER_NAME", line 12\n'
+        )
+        with patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False):
+            result = analyze_log(log)
+        self.assertIn("missing table/view name is **not present", result.answer)
+        self.assertIn("`SCHEMA.PACKAGE_NAME`", result.answer)
+        self.assertIn("all_source", result.answer.lower())
+
+    def test_detects_multiple_technology_log_formats(self):
+        log = "Traceback (most recent call last):\nFile \"job.py\", line 18\nORA-00001: unique constraint"
+        technologies = _detect_technologies(log)
+        self.assertIn("Python", technologies)
+        self.assertIn("Oracle SQL/PLSQL", technologies)
+
+    def test_api_limit_message_explains_credit_exhaustion(self):
+        error = type("ApiError", (Exception,), {"code": "credit_balance_exhausted", "status_code": 429})()
+        message = _api_error_message(error)
+        self.assertIn("HTTP 429", message)
+        self.assertIn("Add credits", message)
 
     def test_redacts_common_secrets(self):
         text = "api_key=super-secret Bearer abc.def-123 password: hunter2"

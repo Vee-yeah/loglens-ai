@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import streamlit as st
 
 from src.analyzer import AnalysisResult, analyze_log
@@ -22,10 +24,13 @@ def render_result(result: AnalysisResult) -> None:
 def main() -> None:
     st.title("🔎 LogLens AI")
     st.write("Turn application logs and error messages into an actionable diagnosis.")
-    st.info(
-        "For AI-powered analysis, set `OPENAI_API_KEY` in your environment. "
-        "Without it, LogLens uses a local rule-based diagnostic mode."
-    )
+    if os.getenv("OPENAI_API_KEY"):
+        st.success("AI-assisted analysis is enabled. Detailed analysis will use the configured OpenAI API key.")
+    else:
+        st.warning(
+            "Local rule-based mode is active — no `OPENAI_API_KEY` was found in this Streamlit process. "
+            "Start Streamlit from the same PowerShell window where you set the key to enable detailed AI analysis."
+        )
 
     tab_upload, tab_paste = st.tabs(["Upload a log", "Paste an error"])
     with tab_upload:
