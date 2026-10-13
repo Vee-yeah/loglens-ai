@@ -21,15 +21,42 @@ class AnalysisResult:
 
 
 RULES = [
+    # Network and platform failures
     (r"connection refused|connectexception", "Connection refused", "The target service is not accepting connections.", "Verify host and port, start the target service, and check firewall/network rules."),
     (r"timed? ?out|readtimeout|sockettimeout", "Timeout", "A network call or operation exceeded its configured wait time.", "Check downstream health and latency; then review timeout and retry settings."),
+    (r"unknownhostexception|name or service not known|getaddrinfo failed", "DNS resolution failure", "The application could not resolve a host name.", "Verify the hostname, DNS configuration, service-discovery entry, and network connectivity."),
+    (r"ssl.*exception|sslerror|certificate_verify_failed|certificate.*expired", "TLS/SSL failure", "A secure connection could not be established or verified.", "Check certificate validity, trusted CA certificates, hostname, and TLS protocol settings."),
+    (r"address already in use|bindexception", "Port already in use", "Another process is already using the configured network port.", "Identify the process using the port, stop it if appropriate, or change the application's port configuration."),
     (r"authentication failed|unauthorized|\b401\b|invalid token", "Authentication failure", "Credentials or access tokens were rejected.", "Validate the credential, expiry, scopes, and the configured authentication endpoint."),
     (r"forbidden|\b403\b|access denied", "Authorization failure", "The caller is authenticated but lacks permission.", "Review service roles, policy bindings, and resource-level permissions."),
     (r"not found|\b404\b", "Resource not found", "A requested endpoint, file, or resource could not be found.", "Check the URL/path, deployment version, and resource identifier."),
+
+    # Java and JVM failures
     (r"outofmemory|out of memory|memoryerror", "Memory exhaustion", "The process ran out of available memory.", "Inspect heap usage and leaks; increase memory only after identifying workload or retention causes."),
+    (r"stackoverflowerror|maximum recursion depth exceeded", "Stack overflow / recursion limit", "An operation recursed too deeply, often due to a circular call path.", "Inspect the call chain for unintended recursion and add a terminating condition or iterative approach."),
     (r"deadlock", "Database deadlock", "Concurrent transactions blocked each other.", "Retry the transaction safely and make transaction order/lock scope consistent."),
     (r"sql.*exception|psqlexception|integrity constraint", "Database error", "The application received a database exception.", "Check the full SQL error, schema constraints, connection health, and recent migrations."),
     (r"nullpointerexception|attributeerror|noneType", "Null reference", "Code used an object/value that was not initialized.", "Locate the first application stack-frame and validate inputs or add a guard condition."),
+    (r"classnotfoundexception|noclassdeffounderror|modulenotfounderror|importerror", "Missing dependency or class", "A required class, module, or library is unavailable at runtime.", "Check the build/dependency manifest, runtime classpath or virtual environment, and deployment artifact."),
+    (r"nosuchmethoderror|abstractmethoderror", "Incompatible library version", "A library method expected by the application is missing at runtime.", "Check for dependency version conflicts and rebuild with compatible, pinned versions."),
+    (r"illegalargumentexception|valueerror", "Invalid argument or input", "A method received a value outside its accepted format or range.", "Inspect the first application stack-frame, validate the input, and add clear boundary checks."),
+
+    # Python failures
+    (r"keyerror", "Missing dictionary key", "Code requested a dictionary key that is not present.", "Validate the input structure and use a default or an explicit key-existence check where appropriate."),
+    (r"indexerror|list index out of range", "Index out of range", "Code accessed a sequence position that does not exist.", "Check collection length before indexing and review loop boundaries."),
+    (r"filenotfounderror|no such file or directory", "File not found", "The application cannot locate a required file or directory.", "Verify the path, working directory, deployment packaging, and file permissions."),
+    (r"permissionerror|permission denied", "Permission denied", "The running process lacks permission for a file, folder, or resource.", "Review filesystem ownership, access-control rules, and the service account's permissions."),
+    (r"zerodivisionerror|division by zero", "Division by zero", "A calculation attempted to divide by a zero value.", "Validate the denominator before calculating and handle the zero case explicitly."),
+    (r"syntaxerror|indentationerror", "Python syntax error", "Python could not parse the source code.", "Inspect the reported file and line for invalid syntax, indentation, or an incompatible Python version."),
+
+    # SQL and database failures
+    (r"duplicate key|unique constraint|uniqueviolation", "Duplicate or unique-key violation", "An insert or update conflicts with an existing unique value.", "Check duplicate requests, use an idempotent write where appropriate, and validate the unique-key design."),
+    (r"foreign key constraint|foreignkeyviolation", "Foreign-key violation", "A write references a parent record that does not exist, or attempts an invalid delete.", "Validate record creation order and referential data; review cascade/delete behavior."),
+    (r"relation .* does not exist|table .* does not exist|invalid object name", "Database table not found", "The query targets a table or view missing from the current database/schema.", "Check the active schema, migration status, table name, and database connection target."),
+    (r"column .* does not exist|unknown column|invalid column name", "Database column not found", "The query references a column absent from the target schema.", "Review the query and recent migrations; ensure application and database versions are compatible."),
+    (r"syntax error at or near|you have an error in your sql syntax", "SQL syntax error", "The database could not parse the SQL statement.", "Review the SQL near the reported position and prefer parameterized queries for generated values."),
+    (r"too many connections|remaining connection slots|connection pool.*exhaust", "Database connection pool exhausted", "All database connections are in use or the server connection limit was reached.", "Check for leaked connections, slow queries, pool sizing, and database connection limits."),
+    (r"lock wait timeout|could not obtain lock", "Database lock wait", "A transaction waited too long for a database lock.", "Find the blocking transaction, shorten transaction scope, and review lock order or retry policy."),
 ]
 
 

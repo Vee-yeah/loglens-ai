@@ -6,7 +6,7 @@ LogLens AI is a Streamlit application that turns raw log files, stack traces, an
 
 - Upload `.log` or `.txt` files.
 - Paste an exception, stack trace, or error excerpt.
-- Detect common failure patterns locally (timeouts, authentication, database errors, memory errors, and more).
+- Detect common Java, Python, and SQL/database failure patterns locally, including timeouts, missing dependencies, null values, data-constraint failures, and memory errors.
 - Optionally use the OpenAI Responses API for contextual root-cause analysis and remediation steps.
 - Redact common secrets before an AI request and cap input at 30,000 characters.
 - Continue to work in local rule-based mode when no API key is configured.

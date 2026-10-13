@@ -19,6 +19,15 @@ class AnalyzerTests(unittest.TestCase):
             result = analyze_log(log)
         self.assertEqual(result.findings[0]["Line number(s)"], "3")
 
+    def test_detects_java_python_and_sql_fallbacks(self):
+        log = "ClassNotFoundException: com.acme.Driver\nKeyError: 'email'\nERROR: duplicate key value violates unique constraint"
+        with patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False):
+            result = analyze_log(log)
+        signals = {item["Signal"] for item in result.findings}
+        self.assertIn("Missing dependency or class", signals)
+        self.assertIn("Missing dictionary key", signals)
+        self.assertIn("Duplicate or unique-key violation", signals)
+
     def test_redacts_common_secrets(self):
         text = "api_key=super-secret Bearer abc.def-123 password: hunter2"
         self.assertNotIn("super-secret", redact_secrets(text))
