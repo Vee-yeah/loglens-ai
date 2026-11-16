@@ -14,8 +14,22 @@ st.set_page_config(page_title="LogLens AI", page_icon="🔎", layout="wide")
 
 def render_result(result: AnalysisResult) -> None:
     st.subheader("Analysis")
-    st.caption(f"Mode: {result.mode} · Input: {result.input_lines} lines")
+    st.caption(f"Mode: {result.mode} · Input: {result.input_lines} lines · Retrieval: {result.retrieval_status}")
     st.markdown(result.answer)
+    if result.rag_matches:
+        st.subheader("Oracle Vector RAG matches" if "Vector" in result.retrieval_status else "Oracle RAG matches")
+        st.dataframe(
+            [
+                {"Technology": item.technology, "Error code": item.error_code, "Runbook": item.title, "Score": item.score}
+                for item in result.rag_matches
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+    if result.web_sources:
+        st.subheader("Internet research")
+        for item in result.web_sources:
+            st.markdown(f"- [{item['title']}]({item['url']})")
     if result.findings:
         st.subheader("Detected signals")
         st.dataframe(result.findings, use_container_width=True, hide_index=True)
@@ -52,12 +66,13 @@ def main() -> None:
             if not pasted_text.strip():
                 st.warning("Paste an error or log excerpt first.")
             else:
+                st.info("Retrieval sequence: Oracle Vector RAG → exact Oracle RAG → local diagnostics → optional AI analysis")
                 with st.spinner("Analyzing error..."):
                     render_result(analyze_log(pasted_text))
 
     with st.expander("Privacy and safe use"):
         st.write(
-            "LogLens redacts common credentials before an AI request. Review logs before "
+            "LogLens redacts common credentials before an AI request. Oracle RAG is searched first; internet research is attempted only when no RAG match is found and a web-search key is configured. Review logs before "
             "uploading: avoid sending personal data, production secrets, or customer data."
         )
 

@@ -2,31 +2,37 @@ import os
 import unittest
 from unittest.mock import patch
 
-from src.analyzer import _api_error_message, _detect_technologies, analyze_log, redact_secrets
+from src.analyzer import _api_error_message, _detect_technologies, _rag_findings, analyze_log, redact_secrets
+from src.rag import KnowledgeMatch, RetrievalResult, compact_search_query, retrieve_from_oracle
 
 
 class AnalyzerTests(unittest.TestCase):
-    def test_detects_connection_refused(self):
-        with patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False):
-            result = analyze_log("java.net.ConnectException: Connection refused")
-        self.assertEqual(result.mode, "Local rule-based")
-        self.assertEqual(result.findings[0]["Signal"], "Connection refused")
-        self.assertEqual(result.findings[0]["Line number(s)"], "1")
+    @staticmethod
+    def _connection_runbook():
+        return KnowledgeMatch(
+            technology="Java/JVM", error_code="ConnectException", title="Connection refused",
+            description="The target service rejected a TCP connection.", likely_causes="Service is down.",
+            remediation="Verify host, port, and service health.", verification="Connect successfully.",
+            source_url=None, match_terms="ConnectException|Connection refused", score=100,
+        )
 
-    def test_reports_actual_matching_line_number(self):
+    def test_rag_match_becomes_a_finding(self):
+        match = self._connection_runbook()
+        findings = _rag_findings("java.net.ConnectException: Connection refused", [match])
+        self.assertEqual(findings[0]["Signal"], "Connection refused")
+        self.assertEqual(findings[0]["Line number(s)"], "1")
+
+    def test_rag_finding_reports_actual_matching_line_number(self):
         log = "INFO Startup complete\nWARN Retrying\nERROR Connection refused"
-        with patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False):
-            result = analyze_log(log)
-        self.assertEqual(result.findings[0]["Line number(s)"], "3")
+        findings = _rag_findings(log, [self._connection_runbook()])
+        self.assertEqual(findings[0]["Line number(s)"], "3")
 
-    def test_detects_java_python_and_sql_fallbacks(self):
+    def test_no_rag_match_does_not_use_hidden_python_rules(self):
         log = "ClassNotFoundException: com.acme.Driver\nKeyError: 'email'\nERROR: duplicate key value violates unique constraint"
-        with patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False):
+        with patch("src.analyzer.retrieve_from_oracle", return_value=RetrievalResult([], "Oracle RAG (0 match(es), 0.1s)")), patch.dict(os.environ, {"OPENAI_API_KEY": ""}, clear=False):
             result = analyze_log(log)
-        signals = {item["Signal"] for item in result.findings}
-        self.assertIn("Missing dependency or class", signals)
-        self.assertIn("Missing dictionary key", signals)
-        self.assertIn("Duplicate or unique-key violation", signals)
+        self.assertEqual(result.findings, [])
+        self.assertEqual(result.mode, "No RAG match + local diagnostics")
 
     def test_oracle_unique_constraint_reports_constraint_and_source_line(self):
         log = (
@@ -68,6 +74,18 @@ class AnalyzerTests(unittest.TestCase):
         self.assertNotIn("super-secret", redact_secrets(text))
         self.assertNotIn("abc.def-123", redact_secrets(text))
         self.assertNotIn("hunter2", redact_secrets(text))
+
+    def test_oracle_rag_is_safe_when_not_configured(self):
+        with patch.dict(os.environ, {"ORACLE_USER": "", "ORACLE_PASSWORD": "", "ORACLE_DSN": ""}, clear=False):
+            result = retrieve_from_oracle("ORA-00942: table or view does not exist")
+        self.assertEqual(result.matches, [])
+        self.assertEqual(result.status, "Oracle RAG not configured")
+
+    def test_web_query_uses_error_signature_not_full_log(self):
+        query = compact_search_query("ORA-00942 password=do-not-send java.lang.NullPointerException")
+        self.assertIn("ORA-00942", query)
+        self.assertIn("NullPointerException", query)
+        self.assertNotIn("do-not-send", query)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,15 @@
 __pycache__/
 *.py[cod]
 .env
+.oracle_wallet/
+.oracle_wallet.zip
 .streamlit/secrets.toml
 .venv/
 venv/
 .pytest_cache/
 streamlit.log
+loglens.log
 streamlit.error.log
+.ppt_build/
+.codex-finalizer/
+deliverables/*.pptx
