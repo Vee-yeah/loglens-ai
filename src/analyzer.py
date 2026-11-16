@@ -25,15 +25,27 @@ class AnalysisResult:
 
 
 def redact_secrets(text: str) -> str:
-    """Remove common credentials before text leaves the machine."""
-    patterns = [
-        r"(?i)(api[_-]?key|token|password|secret)\s*[:=]\s*[^\s,;]+",
-        r"(?i)bearer\s+[a-z0-9._\-~+/=]+",
-        r"AKIA[0-9A-Z]{16}",
+    """Mask credentials and customer PII before text is sent to an external AI API.
+
+    Local evidence extraction and Oracle RAG continue to use the original log;
+    only the outbound AI payload is redacted.
+    """
+    substitutions = [
+        (r"(?i)(api[_-]?key|token|password|secret)\s*[:=]\s*[^\s,;]+", "[REDACTED_SECRET]"),
+        (r"(?i)bearer\s+[a-z0-9._\-~+/=]+", "[REDACTED_BEARER_TOKEN]"),
+        (r"AKIA[0-9A-Z]{16}", "[REDACTED_AWS_KEY]"),
+        # Keep error codes and ordinary numeric metrics intact by masking account
+        # identifiers only when the surrounding log labels them as such.
+        (r"(?i)\b(?:account(?:[_\s-]?(?:number|no|id))?|acct(?:[_\s-]?(?:number|no|id))?)\s*[:=#-]?\s*\d{6,20}\b", "[REDACTED_ACCOUNT_NUMBER]"),
+        (r"(?i)\b(?:contact|mobile|phone|telephone)(?:[_\s-]?(?:number|no))?\s*[:=#-]?\s*(?:\+?\d[\d\s().-]{7,}\d)\b", "[REDACTED_PHONE_NUMBER]"),
+        (r"\b\d{3}-\d{2}-\d{4}\b", "[REDACTED_SSN]"),
+        (r"(?i)\bssn\s*[:=#-]?\s*\d{9}\b", "[REDACTED_SSN]"),
+        (r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[REDACTED_EMAIL]"),
+        (r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b", "[REDACTED_IBAN]"),
     ]
     redacted = text
-    for pattern in patterns:
-        redacted = re.sub(pattern, "[REDACTED]", redacted)
+    for pattern, replacement in substitutions:
+        redacted = re.sub(pattern, replacement, redacted, flags=re.IGNORECASE)
     return redacted
 
 

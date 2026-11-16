@@ -75,6 +75,21 @@ class AnalyzerTests(unittest.TestCase):
         self.assertNotIn("abc.def-123", redact_secrets(text))
         self.assertNotIn("hunter2", redact_secrets(text))
 
+    def test_redacts_customer_pii_before_ai_analysis(self):
+        text = (
+            "accountNumber=123456789012 email=customer@example.com "
+            "phone=+1 (415) 555-0123 ssn=123-45-6789 "
+            "iban=GB82WEST12345698765432"
+        )
+        redacted = redact_secrets(text)
+        for value in ("123456789012", "customer@example.com", "415", "123-45-6789", "GB82WEST12345698765432"):
+            self.assertNotIn(value, redacted)
+        self.assertIn("[REDACTED_ACCOUNT_NUMBER]", redacted)
+        self.assertIn("[REDACTED_EMAIL]", redacted)
+        self.assertIn("[REDACTED_PHONE_NUMBER]", redacted)
+        self.assertIn("[REDACTED_SSN]", redacted)
+        self.assertIn("[REDACTED_IBAN]", redacted)
+
     def test_oracle_rag_is_safe_when_not_configured(self):
         with patch.dict(os.environ, {"ORACLE_USER": "", "ORACLE_PASSWORD": "", "ORACLE_DSN": ""}, clear=False):
             result = retrieve_from_oracle("ORA-00942: table or view does not exist")

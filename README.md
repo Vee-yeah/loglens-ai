@@ -1,17 +1,26 @@
 # LogLens AI
 
-LogLens AI is a Streamlit application that turns raw log files, stack traces, and pasted error messages into a concise explanation of what failed and how to investigate it. It demonstrates a common engineering workflow: reducing time-to-diagnosis during incidents.
+LogLens AI is a Streamlit application built around Oracle AI Vector RAG. It turns raw log files, stack traces, and pasted error messages into a semantic search of reviewed Oracle runbooks, then provides a concise diagnosis and investigation path.
+
+## Vector RAG: primary capability
+
+LogLens uses retrieval before optional generative AI:
+
+    Log / pasted error -> local evidence -> Oracle Vector RAG -> exact Oracle RAG -> local or optional AI diagnosis
+
+Oracle AI Vector Search uses the in-database ALL_MINILM_L12_V2 embedding model to retrieve related runbooks even when the input wording does not exactly match stored error text. For example, a request that a customer cannot see current account money retrieves banking balance and account runbooks.
 
 ## Features
 
+- **Oracle AI Vector RAG first:** semantic similarity search over reviewed Oracle runbooks.
+- **Exact Oracle RAG fallback:** error-code and phrase matching over ERROR_KNOWLEDGE.
 - Upload `.log` or `.txt` files.
 - Paste an exception, stack trace, or error excerpt.
 - Detect common Java, Python, and SQL/database failure patterns locally, including timeouts, missing dependencies, null values, data-constraint failures, and memory errors.
-- Optionally use the OpenAI Responses API for contextual root-cause analysis and remediation steps.
-- Redact common secrets before an AI request and cap input at 30,000 characters.
+- Optionally use the OpenAI Responses API for contextual root-cause analysis and remediation steps after retrieval.
+- Apply a first-layer privacy filter before an AI request: credentials, account numbers, email addresses, phone numbers, Social Security numbers, and IBANs are masked. Input is capped at 30,000 characters.
 - Continue to work in local rule-based mode when no API key is configured.
-- Retrieve reviewed remediation runbooks from an Oracle RAG knowledge base before optional web research.
-- Use Oracle AI Vector Search with the local `all_MiniLM_L12_v2` model for semantic runbook retrieval when configured.
+- Use optional web research only when Oracle RAG has no match; the raw log is not sent to web search.
 
 ## Technology
 
@@ -60,7 +69,7 @@ VERSION             Current release number
 database/           Oracle schema and seeded error-knowledge runbooks
 ```
 
-## Oracle RAG knowledge base
+## Exact Oracle RAG knowledge base
 
 The app queries Oracle first for curated error runbooks. If Oracle returns no match, optional internet research is attempted only when `TAVILY_API_KEY` is configured. The raw log is never sent to web search; only a compact error signature is used.
 
@@ -73,7 +82,7 @@ The seed migrations contain Oracle, Java, Python, SQL, HTTP, network, and platfo
 
 `04_seed_banking_functional_runbooks.sql` adds fictional banking examples (accounts, payments, limits, KYC, ledger, FX, loans, and cards). Its schema, table, service, and queue names are intentionally illustrative: replace them with approved internal names and processes before any production use.
 
-## Oracle AI Vector Search (optional semantic RAG)
+## Oracle AI Vector Search setup
 
 After loading the local Oracle model `ALL_MINILM_L12_V2` for `LOGLENS_VECTOR`, run [database/05_create_vector_rag.sql](database/05_create_vector_rag.sql) as that user. The app then embeds each input locally in Oracle and retrieves semantically related runbooks before exact phrase matching. Set `ORACLE_VECTOR_USER`, `ORACLE_VECTOR_PASSWORD`, and `ORACLE_VECTOR_MODEL` in addition to the normal Oracle wallet settings.
 

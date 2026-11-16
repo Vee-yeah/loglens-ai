@@ -72,7 +72,7 @@ def main() -> None:
 
     with st.expander("Privacy and safe use"):
         st.write(
-            "LogLens redacts common credentials before an AI request. Oracle RAG is searched first; internet research is attempted only when no RAG match is found and a web-search key is configured. Review logs before "
+            "Before an external AI request, LogLens masks common credentials plus customer account numbers, email addresses, phone numbers, and Social Security numbers. Oracle RAG is searched locally first; internet research is attempted only when no RAG match is found and a web-search key is configured. Review logs before "
             "uploading: avoid sending personal data, production secrets, or customer data."
         )
 
