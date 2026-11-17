@@ -168,6 +168,7 @@ def retrieve_semantic_from_oracle(log_text: str, limit: int = 3) -> RetrievalRes
         return RetrievalResult([], "Oracle Vector RAG driver is not installed")
 
     safe_limit = max(1, min(int(limit), 10))
+    minimum_score = int(os.getenv("ORACLE_VECTOR_MIN_SIMILARITY", "40"))
     model = os.getenv("ORACLE_VECTOR_MODEL", "ALL_MINILM_L12_V2")
     query = f"""
         WITH query_embedding AS (
@@ -201,8 +202,10 @@ def retrieve_semantic_from_oracle(log_text: str, limit: int = 3) -> RetrievalRes
                         match_terms=_as_text(row[8]), score=int(row[9]),
                     )
                     for row in cursor
+                    if int(row[9]) >= minimum_score
                 ]
         elapsed = perf_counter() - started_at
+        LOGGER.info("Oracle Vector RAG minimum similarity=%s; accepted=%s", minimum_score, len(matches))
         LOGGER.info("Oracle Vector RAG lookup succeeded: %s match(es) in %.2fs", len(matches), elapsed)
         return RetrievalResult(matches, f"Oracle Vector RAG ({len(matches)} match(es), {elapsed:.1f}s)")
     except Exception as error:
